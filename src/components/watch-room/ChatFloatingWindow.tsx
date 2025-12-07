@@ -14,7 +14,9 @@ export default function ChatFloatingWindow() {
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageCountRef = useRef(0);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -22,6 +24,28 @@ export default function ChatFloatingWindow() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [watchRoom?.chatMessages, watchRoom?.currentRoom]);
+
+  // 跟踪未读消息数量
+  useEffect(() => {
+    if (!watchRoom?.chatMessages) return;
+
+    const currentCount = watchRoom.chatMessages.length;
+    if (currentCount > lastMessageCountRef.current) {
+      // 有新消息
+      if (!isOpen && !isMinimized) {
+        // 只有在聊天窗口完全关闭时才增加未读计数
+        setUnreadCount(prev => prev + (currentCount - lastMessageCountRef.current));
+      }
+    }
+    lastMessageCountRef.current = currentCount;
+  }, [watchRoom?.chatMessages, isOpen, isMinimized]);
+
+  // 打开聊天窗口时清空未读计数
+  useEffect(() => {
+    if (isOpen || isMinimized) {
+      setUnreadCount(0);
+    }
+  }, [isOpen, isMinimized]);
 
   // 如果没有加入房间，不显示聊天按钮
   if (!watchRoom?.currentRoom) {
@@ -81,13 +105,13 @@ export default function ChatFloatingWindow() {
         {/* 聊天按钮 */}
         <button
           onClick={() => setIsOpen(true)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-2xl transition-all hover:scale-110 hover:bg-green-600"
+          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-2xl transition-all hover:scale-110 hover:bg-green-600"
           aria-label="打开聊天"
         >
           <MessageCircle className="h-6 w-6" />
-          {chatMessages.length > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold">
-              {chatMessages.length > 99 ? '99+' : chatMessages.length}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </button>
