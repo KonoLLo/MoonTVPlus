@@ -22,7 +22,7 @@ export interface AdminConfig {
     // TMDB配置
     TMDBApiKey?: string;
     TMDBProxy?: string;
-    BannerDataSource?: string; // 轮播图数据源：TMDB 或 TX
+    BannerDataSource?: string; // 轮播图数据源：TMDB、TX 或 Douban
     RecommendationDataSource?: string; // 更多推荐数据源：Douban、TMDB、Mixed、MixedSmart
     // Pansou配置
     PansouApiUrl?: string;

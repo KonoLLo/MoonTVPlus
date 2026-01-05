@@ -6006,7 +6006,7 @@ const SiteConfigComponent = ({
     DanmakuApiToken: '87654321',
     TMDBApiKey: '',
     TMDBProxy: '',
-    BannerDataSource: 'TMDB',
+    BannerDataSource: 'Douban',
     RecommendationDataSource: 'Mixed',
     PansouApiUrl: '',
     PansouUsername: '',
@@ -6095,7 +6095,7 @@ const SiteConfigComponent = ({
         DanmakuApiToken: config.SiteConfig.DanmakuApiToken || '87654321',
         TMDBApiKey: config.SiteConfig.TMDBApiKey || '',
         TMDBProxy: config.SiteConfig.TMDBProxy || '',
-        BannerDataSource: config.SiteConfig.BannerDataSource || 'TMDB',
+        BannerDataSource: config.SiteConfig.BannerDataSource || 'Douban',
         PansouApiUrl: config.SiteConfig.PansouApiUrl || '',
         PansouUsername: config.SiteConfig.PansouUsername || '',
         PansouPassword: config.SiteConfig.PansouPassword || '',
@@ -6577,7 +6577,7 @@ const SiteConfigComponent = ({
           轮播图数据源
         </label>
         <select
-          value={siteSettings.BannerDataSource || 'TMDB'}
+          value={siteSettings.BannerDataSource || 'Douban'}
           onChange={(e) =>
             setSiteSettings((prev) => ({
               ...prev,
@@ -6586,6 +6586,7 @@ const SiteConfigComponent = ({
           }
           className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
         >
+          <option value='Douban'>豆瓣</option>
           <option value='TMDB'>TMDB</option>
           <option value='TX'>TX</option>
         </select>

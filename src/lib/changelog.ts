@@ -12,7 +12,7 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
 	{
     version: '206.1.0',
-    date: '2026-01-04',
+    date: '2026-01-05',
 	added: [
 		"新增手动上传弹幕功能"
     ],
