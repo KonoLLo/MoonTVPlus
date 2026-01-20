@@ -10908,50 +10908,55 @@ const WebLiveConfig = ({
         <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
           <thead className='bg-gray-50 dark:bg-gray-900'>
             <tr>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>名称</th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>直播类型</th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>房间ID</th>
-              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>状态</th>
-              <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>操作</th>
+              <th className='px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>名称</th>
+              <th className='hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>直播类型</th>
+              <th className='hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>房间ID</th>
+              <th className='px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>状态</th>
+              <th className='px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase'>操作</th>
             </tr>
           </thead>
           <tbody className='divide-y divide-gray-200 dark:divide-gray-700'>
             {webLiveSources.map((source) => (
               <tr key={source.key} className='hover:bg-gray-50 dark:hover:bg-gray-800'>
-                <td className='px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>{source.name}</td>
-                <td className='px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>{source.platform === 'huya' ? '虎牙' : source.platform}</td>
-                <td className='px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>{source.roomId}</td>
-                <td className='px-6 py-4'>
-                  <span className={`px-2 py-1 text-xs rounded-full ${!source.disabled ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'}`}>
+                <td className='px-3 sm:px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
+                  <div>{source.name}</div>
+                  <div className='sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-1'>{source.platform === 'huya' ? '虎牙' : source.platform} · {source.roomId}</div>
+                </td>
+                <td className='hidden sm:table-cell px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>{source.platform === 'huya' ? '虎牙' : source.platform}</td>
+                <td className='hidden sm:table-cell px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>{source.roomId}</td>
+                <td className='px-3 sm:px-6 py-4 whitespace-nowrap'>
+                  <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${!source.disabled ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'}`}>
                     {!source.disabled ? '启用中' : '已禁用'}
                   </span>
                 </td>
-                <td className='px-6 py-4 text-right text-sm space-x-2'>
-                  <button
-                    onClick={() => handleToggle(source.key)}
-                    disabled={isLoading(`toggleWebLive_${source.key}`)}
-                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${!source.disabled ? buttonStyles.roundedDanger : buttonStyles.roundedSuccess} ${isLoading(`toggleWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {!source.disabled ? '禁用' : '启用'}
-                  </button>
-                  {source.from !== 'config' && (
-                    <>
-                      <button
-                        onClick={() => setEditingSource(source)}
-                        disabled={isLoading(`editWebLive_${source.key}`)}
-                        className={`${buttonStyles.roundedPrimary} ${isLoading(`editWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        编辑
-                      </button>
-                      <button
-                        onClick={() => handleDelete(source.key)}
-                        disabled={isLoading(`deleteWebLive_${source.key}`)}
-                        className={`${buttonStyles.roundedSecondary} ${isLoading(`deleteWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        删除
-                      </button>
-                    </>
-                  )}
+                <td className='px-3 sm:px-6 py-4 text-right text-sm whitespace-nowrap'>
+                  <div className='flex flex-col sm:flex-row gap-1 sm:gap-2 items-end sm:items-center justify-end'>
+                    <button
+                      onClick={() => handleToggle(source.key)}
+                      disabled={isLoading(`toggleWebLive_${source.key}`)}
+                      className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${!source.disabled ? buttonStyles.roundedDanger : buttonStyles.roundedSuccess} ${isLoading(`toggleWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {!source.disabled ? '禁用' : '启用'}
+                    </button>
+                    {source.from !== 'config' && (
+                      <>
+                        <button
+                          onClick={() => setEditingSource(source)}
+                          disabled={isLoading(`editWebLive_${source.key}`)}
+                          className={`${buttonStyles.roundedPrimary} ${isLoading(`editWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          onClick={() => handleDelete(source.key)}
+                          disabled={isLoading(`deleteWebLive_${source.key}`)}
+                          className={`${buttonStyles.roundedSecondary} ${isLoading(`deleteWebLive_${source.key}`) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          删除
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
