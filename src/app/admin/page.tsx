@@ -25,6 +25,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Bot,
+  Cat,
   Check,
   CheckCircle,
   ChevronDown,
@@ -35,6 +36,7 @@ import {
   FolderOpen,
   Globe,
   Mail,
+  Music,
   Palette,
   Settings,
   Tv,
@@ -49,6 +51,7 @@ import { createPortal } from 'react-dom';
 import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
+import AnimeSubscriptionComponent from '@/components/AnimeSubscriptionComponent';
 import CorrectDialog from '@/components/CorrectDialog';
 import DataMigration from '@/components/DataMigration';
 import PageLayout from '@/components/PageLayout';
@@ -377,6 +380,7 @@ interface LiveDataSource {
   channelNumber?: number;
   disabled?: boolean;
   from: 'config' | 'custom';
+  proxyMode?: 'full' | 'm3u8-only' | 'direct'; // 代理模式
 }
 
 // 自定义分类数据类型
@@ -3509,7 +3513,9 @@ const EmbyConfigComponent = ({
     appendMediaSourceId: false,
     transcodeMp4: false,
     proxyPlay: false,
+    customUserAgent: '',
   });
+  const [authMode, setAuthMode] = useState<'apikey' | 'password'>('apikey');
 
   // 从配置加载源列表
   useEffect(() => {
@@ -3548,7 +3554,9 @@ const EmbyConfigComponent = ({
       appendMediaSourceId: false,
       transcodeMp4: false,
       proxyPlay: false,
+      customUserAgent: '',
     });
+    setAuthMode('apikey');
     setEditingSource(null);
     setShowAddForm(false);
   };
@@ -3556,6 +3564,14 @@ const EmbyConfigComponent = ({
   // 开始编辑
   const handleEdit = (source: any) => {
     setFormData({ ...source });
+    // 根据现有配置判断认证方式
+    if (source.ApiKey) {
+      setAuthMode('apikey');
+    } else if (source.Username) {
+      setAuthMode('password');
+    } else {
+      setAuthMode('apikey');
+    }
     setEditingSource(source);
     setShowAddForm(false);
   };
@@ -3572,6 +3588,19 @@ const EmbyConfigComponent = ({
     if (!formData.key || !formData.name || !formData.ServerURL) {
       showError('请填写必填字段：标识符、名称、服务器地址', showAlert);
       return;
+    }
+
+    // 根据认证方式验证必填字段
+    if (authMode === 'apikey') {
+      if (!formData.ApiKey || !formData.UserId) {
+        showError('使用密钥认证时，API Key 和用户 ID 为必填项', showAlert);
+        return;
+      }
+    } else if (authMode === 'password') {
+      if (!formData.Username) {
+        showError('使用账号认证时，用户名为必填项', showAlert);
+        return;
+      }
     }
 
     // 验证key唯一性
@@ -3620,11 +3649,6 @@ const EmbyConfigComponent = ({
 
   // 删除源
   const handleDelete = async (source: any) => {
-    if (sources.length === 1) {
-      showError('至少需要保留一个Emby源', showAlert);
-      return;
-    }
-
     if (!confirm(`确定要删除 "${source.name}" 吗？`)) {
       return;
     }
@@ -4088,67 +4112,119 @@ const EmbyConfigComponent = ({
               />
             </div>
 
-            {/* API Key */}
+            {/* 认证方式切换卡 */}
             <div>
               <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-                API Key（推荐）
+                认证方式 *
               </label>
-              <input
-                type='password'
-                value={formData.ApiKey}
-                onChange={(e) => setFormData({ ...formData, ApiKey: e.target.value })}
-                placeholder='输入 Emby API Key'
-                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-              />
-              <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-                推荐使用 API Key 认证。如果不使用 API Key，请填写下方的用户名和密码。
-              </p>
+              <div className='flex gap-2 mb-4'>
+                <button
+                  type='button'
+                  onClick={() => {
+                    setAuthMode('apikey');
+                    // 切换到密钥认证时，清空用户名密码
+                    setFormData({ ...formData, Username: '', Password: '' });
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    authMode === 'apikey'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  密钥认证
+                </button>
+                <button
+                  type='button'
+                  onClick={() => {
+                    setAuthMode('password');
+                    // 切换到账号认证时，清空 API Key 和 UserId
+                    setFormData({ ...formData, ApiKey: '', UserId: '' });
+                  }}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    authMode === 'password'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  账号认证
+                </button>
+              </div>
             </div>
 
-            {/* 用户名 */}
-            <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-                用户名（可选）
-              </label>
-              <input
-                type='text'
-                value={formData.Username}
-                onChange={(e) => setFormData({ ...formData, Username: e.target.value })}
-                placeholder='Emby 用户名'
-                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-              />
-            </div>
+            {/* 密钥认证模式 */}
+            {authMode === 'apikey' && (
+              <>
+                {/* API Key */}
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    API Key *
+                  </label>
+                  <input
+                    type='password'
+                    value={formData.ApiKey}
+                    onChange={(e) => setFormData({ ...formData, ApiKey: e.target.value })}
+                    placeholder='输入 Emby API Key'
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  />
+                  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+                    在 Emby 控制台的 API 密钥页面生成
+                  </p>
+                </div>
 
-            {/* 密码 */}
-            <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-                密码（可选）
-              </label>
-              <input
-                type='password'
-                value={formData.Password}
-                onChange={(e) => setFormData({ ...formData, Password: e.target.value })}
-                placeholder='Emby 密码'
-                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-              />
-            </div>
+                {/* 用户 ID */}
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    用户 ID *
+                  </label>
+                  <input
+                    type='text'
+                    value={formData.UserId}
+                    onChange={(e) => setFormData({ ...formData, UserId: e.target.value })}
+                    placeholder='aab507c58e874de6a9bd12388d72f4d2'
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  />
+                  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+                    从你的 Emby 抓包数据中获取用户 ID，通常在 URL 中如 /Users/[userId]/...
+                  </p>
+                </div>
+              </>
+            )}
 
-            {/* 用户 ID */}
-            <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-                用户 ID（使用 API Key 时必填）
-              </label>
-              <input
-                type='text'
-                value={formData.UserId}
-                onChange={(e) => setFormData({ ...formData, UserId: e.target.value })}
-                placeholder='aab507c58e874de6a9bd12388d72f4d2'
-                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-              />
-              <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-                从你的 Emby 抓包数据中获取用户 ID，通常在 URL 中如 /Users/[userId]/...
-              </p>
-            </div>
+            {/* 账号认证模式 */}
+            {authMode === 'password' && (
+              <>
+                {/* 用户名 */}
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    用户名 *
+                  </label>
+                  <input
+                    type='text'
+                    value={formData.Username}
+                    onChange={(e) => setFormData({ ...formData, Username: e.target.value })}
+                    placeholder='Emby 用户名'
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  />
+                </div>
+
+                {/* 密码 */}
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                    密码（可选）
+                  </label>
+                  <input
+                    type='password'
+                    value={formData.Password}
+                    onChange={(e) => setFormData({ ...formData, Password: e.target.value })}
+                    placeholder='Emby 密码（如果账号没有密码可留空）'
+                    className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  />
+                  <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+                    如果 Emby 账号没有设置密码，可以留空
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* 启用开关 */}
             <div className='flex items-center justify-between'>
@@ -4248,7 +4324,7 @@ const EmbyConfigComponent = ({
               </div>
 
               {/* 视频播放代理开关 */}
-              <div className='flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700'>
+              <div className='flex items-center justify-between mb-3'>
                 <div className='flex-1'>
                   <h4 className='text-sm font-medium text-gray-900 dark:text-white'>
                     视频播放代理
@@ -4269,6 +4345,23 @@ const EmbyConfigComponent = ({
                     }`}
                   />
                 </button>
+            </div>
+
+            {/* 自定义User-Agent */}
+            <div className='mb-3'>
+              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                自定义User-Agent
+              </label>
+              <input
+                type='text'
+                value={formData.customUserAgent || ''}
+                onChange={(e) => setFormData({ ...formData, customUserAgent: e.target.value })}
+                placeholder='留空使用默认浏览器UA'
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm'
+              />
+              <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                用于登录、获取影片和代理视频时的User-Agent，留空则使用默认浏览器UA
+              </p>
             </div>
             </div>
 
@@ -6270,6 +6363,9 @@ const ThemeConfigComponent = ({
     customCSS: '',
     enableCache: true,
     cacheMinutes: 1440, // 默认1天（1440分钟）
+    progressThumbType: 'default' as 'default' | 'preset' | 'custom',
+    progressThumbPresetId: '',
+    progressThumbCustomUrl: '',
   });
   const [loginBackgroundImages, setLoginBackgroundImages] = useState<string[]>(['']);
   const [registerBackgroundImages, setRegisterBackgroundImages] = useState<string[]>(['']);
@@ -6282,6 +6378,9 @@ const ThemeConfigComponent = ({
         customCSS: config.ThemeConfig.customCSS || '',
         enableCache: config.ThemeConfig.enableCache !== false,
         cacheMinutes: config.ThemeConfig.cacheMinutes || 1440,
+        progressThumbType: config.ThemeConfig.progressThumbType || 'default',
+        progressThumbPresetId: config.ThemeConfig.progressThumbPresetId || '',
+        progressThumbCustomUrl: config.ThemeConfig.progressThumbCustomUrl || '',
       });
 
       // 解析背景图配置
@@ -6713,6 +6812,169 @@ const ThemeConfigComponent = ({
         </p>
       </div>
 
+      {/* 进度条图标配置 */}
+      <div className='bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700'>
+        <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2'>
+          <Palette className='w-5 h-5' />
+          进度条图标
+        </h3>
+        <p className='text-sm text-gray-600 dark:text-gray-400 mb-4'>
+          自定义视频播放器进度条的滑块图标，让播放器更具个性
+        </p>
+
+        {/* 图标类型选择 */}
+        <div className='space-y-4 mb-6'>
+          <label className='flex items-center space-x-3 cursor-pointer'>
+            <input
+              type='radio'
+              checked={themeSettings.progressThumbType === 'default'}
+              onChange={() =>
+                setThemeSettings((prev) => ({
+                  ...prev,
+                  progressThumbType: 'default',
+                }))
+              }
+              className='w-4 h-4 text-blue-600'
+            />
+            <span className='text-gray-900 dark:text-gray-100'>
+              默认圆点
+            </span>
+          </label>
+          <label className='flex items-center space-x-3 cursor-pointer'>
+            <input
+              type='radio'
+              checked={themeSettings.progressThumbType === 'preset'}
+              onChange={() =>
+                setThemeSettings((prev) => ({
+                  ...prev,
+                  progressThumbType: 'preset',
+                }))
+              }
+              className='w-4 h-4 text-blue-600'
+            />
+            <span className='text-gray-900 dark:text-gray-100'>
+              内置图标
+            </span>
+          </label>
+          <label className='flex items-center space-x-3 cursor-pointer'>
+            <input
+              type='radio'
+              checked={themeSettings.progressThumbType === 'custom'}
+              onChange={() =>
+                setThemeSettings((prev) => ({
+                  ...prev,
+                  progressThumbType: 'custom',
+                }))
+              }
+              className='w-4 h-4 text-blue-600'
+            />
+            <span className='text-gray-900 dark:text-gray-100'>
+              自定义图标
+            </span>
+          </label>
+        </div>
+
+        {/* 预制图标选择 */}
+        {themeSettings.progressThumbType === 'preset' && (
+          <div className='space-y-3 mb-4'>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300'>
+              选择内置图标
+            </label>
+            <div className='grid grid-cols-2 md:grid-cols-3 gap-3'>
+              {[
+                { id: 'renako', name: '玲奈子', url: '/icons/q/renako.png', color: '#ec4899' },
+                { id: 'irena', name: '伊蕾娜', url: '/icons/q/irena.png', color: '#f8fafc' },
+                { id: 'emilia', name: '爱蜜莉雅', url: '/icons/q/emilia.png', color: '#f8fafc' },
+              ].map((thumb) => (
+                <button
+                  key={thumb.id}
+                  type='button'
+                  onClick={() =>
+                    setThemeSettings((prev) => ({
+                      ...prev,
+                      progressThumbPresetId: thumb.id,
+                    }))
+                  }
+                  className={`relative p-4 border-2 rounded-lg transition-all ${
+                    themeSettings.progressThumbPresetId === thumb.id
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                >
+                  <div className='flex flex-col items-center gap-2'>
+                    <img
+                      src={thumb.url}
+                      alt={thumb.name}
+                      className='w-12 h-12 object-contain'
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect width="48" height="48" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3E?%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                    <span className='text-sm font-medium text-gray-700 dark:text-gray-300 text-center'>
+                      {thumb.name}
+                    </span>
+                    <div
+                      className='w-8 h-2 rounded-full'
+                      style={{ backgroundColor: thumb.color }}
+                      title='进度条颜色'
+                    />
+                  </div>
+                  {themeSettings.progressThumbPresetId === thumb.id && (
+                    <div className='absolute top-2 right-2'>
+                      <Check className='w-5 h-5 text-blue-600 dark:text-blue-400' />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 自定义图标URL输入 */}
+        {themeSettings.progressThumbType === 'custom' && (
+          <div className='space-y-3'>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300'>
+              自定义图标URL
+            </label>
+            <input
+              type='text'
+              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
+              placeholder='例如: https://example.com/icon.png'
+              value={themeSettings.progressThumbCustomUrl}
+              onChange={(e) =>
+                setThemeSettings((prev) => ({
+                  ...prev,
+                  progressThumbCustomUrl: e.target.value,
+                }))
+              }
+            />
+            <p className='text-xs text-gray-500 dark:text-gray-400'>
+              支持 PNG、JPG、GIF、WebP 格式，建议尺寸 32x32px，图片URL必须可公开访问
+            </p>
+            {themeSettings.progressThumbCustomUrl && (
+              <div className='mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg'>
+                <p className='text-xs text-gray-600 dark:text-gray-400 mb-2'>预览：</p>
+                <img
+                  src={themeSettings.progressThumbCustomUrl}
+                  alt='自定义图标预览'
+                  className='w-12 h-12 object-contain border border-gray-300 dark:border-gray-600 rounded'
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    const parent = (e.target as HTMLImageElement).parentElement;
+                    if (parent && !parent.querySelector('.error-msg')) {
+                      const errorMsg = document.createElement('p');
+                      errorMsg.className = 'text-xs text-red-500 error-msg';
+                      errorMsg.textContent = '图片加载失败，请检查URL是否正确';
+                      parent.appendChild(errorMsg);
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 保存按钮 */}
       <div className='flex justify-end'>
         <button
@@ -6725,6 +6987,350 @@ const ThemeConfigComponent = ({
           }
         >
           {isLoading('saveThemeConfig') ? '保存中...' : '保存个性化配置'}
+        </button>
+      </div>
+
+      {/* 弹窗 */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={hideAlert}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        timer={alertModal.timer}
+        showConfirm={alertModal.showConfirm}
+      />
+    </div>
+  );
+};
+
+// 音乐配置组件
+const MusicConfigComponent = ({
+  config,
+  refreshConfig,
+}: {
+  config: AdminConfig | null;
+  refreshConfig: () => Promise<void>;
+}) => {
+  const { alertModal, showAlert, hideAlert } = useAlertModal();
+  const { isLoading, withLoading } = useLoadingState();
+
+  const [musicSettings, setMusicSettings] = useState({
+    TuneHubEnabled: false,
+    TuneHubBaseUrl: 'https://tunehub.sayqz.com/api',
+    TuneHubApiKey: '',
+    OpenListCacheEnabled: false,
+    OpenListCacheURL: '',
+    OpenListCacheUsername: '',
+    OpenListCachePassword: '',
+    OpenListCachePath: '/music-cache',
+    OpenListCacheProxyEnabled: true,
+  });
+
+  // 从配置加载音乐设置
+  useEffect(() => {
+    if (config?.MusicConfig) {
+      setMusicSettings({
+        TuneHubEnabled: config.MusicConfig.TuneHubEnabled ?? false,
+        TuneHubBaseUrl: config.MusicConfig.TuneHubBaseUrl ?? 'https://tunehub.sayqz.com/api',
+        TuneHubApiKey: config.MusicConfig.TuneHubApiKey ?? '',
+        OpenListCacheEnabled: config.MusicConfig.OpenListCacheEnabled ?? false,
+        OpenListCacheURL: config.MusicConfig.OpenListCacheURL ?? '',
+        OpenListCacheUsername: config.MusicConfig.OpenListCacheUsername ?? '',
+        OpenListCachePassword: config.MusicConfig.OpenListCachePassword ?? '',
+        OpenListCachePath: config.MusicConfig.OpenListCachePath ?? '/music-cache',
+        OpenListCacheProxyEnabled: config.MusicConfig.OpenListCacheProxyEnabled ?? true,
+      });
+    }
+  }, [config]);
+
+  const handleSave = async () => {
+    await withLoading('saveMusicConfig', async () => {
+      try {
+        const resp = await fetch('/api/admin/music', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...musicSettings }),
+        });
+
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.error || '保存失败');
+        }
+
+        showAlert({ type: 'success', title: '保存成功', message: '音乐配置已更新', timer: 2000 });
+        await refreshConfig();
+      } catch (error: any) {
+        showAlert({ type: 'error', title: '保存失败', message: error.message || '未知错误', showConfirm: true });
+      }
+    });
+  };
+
+  return (
+    <div className='space-y-6'>
+      {/* TuneHub 音乐配置 */}
+      <div className='space-y-4'>
+        <h3 className='text-sm font-semibold text-gray-900 dark:text-gray-100'>
+          TuneHub 音乐配置
+        </h3>
+
+        {/* 开启音乐功能 */}
+        <div>
+          <div className='flex items-center justify-between'>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              开启音乐功能
+            </label>
+            <button
+              type='button'
+              onClick={() =>
+                setMusicSettings((prev) => ({
+                  ...prev,
+                  TuneHubEnabled: !prev.TuneHubEnabled,
+                }))
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                musicSettings.TuneHubEnabled
+                  ? buttonStyles.toggleOn
+                  : buttonStyles.toggleOff
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full ${
+                  buttonStyles.toggleThumb
+                } transition-transform ${
+                  musicSettings.TuneHubEnabled
+                    ? buttonStyles.toggleThumbOn
+                    : buttonStyles.toggleThumbOff
+                }`}
+              />
+            </button>
+          </div>
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            开启后将在首页显示音乐视听入口，支持网易云、QQ音乐、酷我音乐
+          </p>
+        </div>
+
+        {/* TuneHub Base URL */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            TuneHub API 地址
+          </label>
+          <input
+            type='text'
+            placeholder='https://tunehub.sayqz.com/api'
+            value={musicSettings.TuneHubBaseUrl}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                TuneHubBaseUrl: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            TuneHub API 的基础地址，默认为 https://tunehub.sayqz.com/api。也可以通过环境变量 TUNEHUB_BASE_URL 配置
+          </p>
+        </div>
+
+        {/* TuneHub API Key */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            TuneHub API Key
+          </label>
+          <input
+            type='password'
+            placeholder='th_your_api_key_here'
+            value={musicSettings.TuneHubApiKey}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                TuneHubApiKey: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            用于解析歌曲播放链接的 API Key（消耗积分）。搜索、榜单、歌单等功能不需要 Key。也可以通过环境变量 TUNEHUB_API_KEY 配置
+          </p>
+        </div>
+      </div>
+
+      {/* OpenList 缓存配置 */}
+      <div className='space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700'>
+        <h3 className='text-sm font-semibold text-gray-900 dark:text-gray-100'>
+          OpenList 缓存配置
+        </h3>
+
+        {/* 开启 OpenList 缓存 */}
+        <div>
+          <div className='flex items-center justify-between'>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              开启 OpenList 缓存
+            </label>
+            <button
+              type='button'
+              onClick={() =>
+                setMusicSettings((prev) => ({
+                  ...prev,
+                  OpenListCacheEnabled: !prev.OpenListCacheEnabled,
+                }))
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                musicSettings.OpenListCacheEnabled
+                  ? buttonStyles.toggleOn
+                  : buttonStyles.toggleOff
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full ${
+                  buttonStyles.toggleThumb
+                } transition-transform ${
+                  musicSettings.OpenListCacheEnabled
+                    ? buttonStyles.toggleThumbOn
+                    : buttonStyles.toggleThumbOff
+                }`}
+              />
+            </button>
+          </div>
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            开启后将音乐解析结果（播放链接、歌词、元信息）和音频文件缓存到 OpenList，减少 API 调用次数并支持离线播放
+          </p>
+        </div>
+
+        {/* OpenList URL */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            OpenList 服务器地址
+          </label>
+          <input
+            type='text'
+            placeholder='https://your-openlist-server.com'
+            value={musicSettings.OpenListCacheURL}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                OpenListCacheURL: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            OpenList 服务器的完整地址（例如：https://your-openlist-server.com）
+          </p>
+        </div>
+
+        {/* OpenList 用户名 */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            OpenList 用户名
+          </label>
+          <input
+            type='text'
+            placeholder='admin'
+            value={musicSettings.OpenListCacheUsername}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                OpenListCacheUsername: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+        </div>
+
+        {/* OpenList 密码 */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            OpenList 密码
+          </label>
+          <input
+            type='password'
+            placeholder='••••••••'
+            value={musicSettings.OpenListCachePassword}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                OpenListCachePassword: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            用于登录 OpenList 并获取访问权限
+          </p>
+        </div>
+
+        {/* OpenList 缓存目录 */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            缓存目录路径
+          </label>
+          <input
+            type='text'
+            placeholder='/music-cache'
+            value={musicSettings.OpenListCachePath}
+            onChange={(e) =>
+              setMusicSettings((prev) => ({
+                ...prev,
+                OpenListCachePath: e.target.value,
+              }))
+            }
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            音乐缓存在 OpenList 中的存储目录（例如：/music-cache）
+          </p>
+        </div>
+
+        {/* 缓存代理返回开关 */}
+        <div>
+          <div className='flex items-center justify-between'>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              启用缓存代理返回
+            </label>
+            <button
+              type='button'
+              onClick={() =>
+                setMusicSettings((prev) => ({
+                  ...prev,
+                  OpenListCacheProxyEnabled: !prev.OpenListCacheProxyEnabled,
+                }))
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                musicSettings.OpenListCacheProxyEnabled
+                  ? buttonStyles.toggleOn
+                  : buttonStyles.toggleOff
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full ${
+                  buttonStyles.toggleThumb
+                } transition-transform ${
+                  musicSettings.OpenListCacheProxyEnabled
+                    ? buttonStyles.toggleThumbOn
+                    : buttonStyles.toggleThumbOff
+                }`}
+              />
+            </button>
+          </div>
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            开启后，如果 OpenList 有缓存，将通过代理方式返回给前端，并设置永久缓存头，提升加载速度
+          </p>
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      <div className='flex justify-end'>
+        <button
+          onClick={handleSave}
+          disabled={isLoading('saveMusicConfig')}
+          className={`px-4 py-2 ${
+            isLoading('saveMusicConfig')
+              ? buttonStyles.disabled
+              : buttonStyles.success
+          } rounded-lg transition-colors`}
+        >
+          {isLoading('saveMusicConfig') ? '保存中…' : '保存'}
         </button>
       </div>
 
@@ -9722,6 +10328,7 @@ const AIConfigComponent = ({
   const [enableHomepageEntry, setEnableHomepageEntry] = useState(true);
   const [enableVideoCardEntry, setEnableVideoCardEntry] = useState(true);
   const [enablePlayPageEntry, setEnablePlayPageEntry] = useState(true);
+  const [enableAIComments, setEnableAIComments] = useState(false);
 
   // 权限控制
   const [allowRegularUsers, setAllowRegularUsers] = useState(true);
@@ -9752,6 +10359,7 @@ const AIConfigComponent = ({
       setEnableHomepageEntry(config.AIConfig.EnableHomepageEntry !== false);
       setEnableVideoCardEntry(config.AIConfig.EnableVideoCardEntry !== false);
       setEnablePlayPageEntry(config.AIConfig.EnablePlayPageEntry !== false);
+      setEnableAIComments(config.AIConfig.EnableAIComments || false);
       setAllowRegularUsers(config.AIConfig.AllowRegularUsers !== false);
       setTemperature(config.AIConfig.Temperature ?? 0.7);
       setMaxTokens(config.AIConfig.MaxTokens ?? 1000);
@@ -9785,6 +10393,7 @@ const AIConfigComponent = ({
             EnableHomepageEntry: enableHomepageEntry,
             EnableVideoCardEntry: enableVideoCardEntry,
             EnablePlayPageEntry: enablePlayPageEntry,
+            EnableAIComments: enableAIComments,
             AllowRegularUsers: allowRegularUsers,
             Temperature: temperature,
             MaxTokens: maxTokens,
@@ -10054,6 +10663,7 @@ const AIConfigComponent = ({
           { key: 'homepage', label: '首页入口', desc: '在首页显示AI问片入口', state: enableHomepageEntry, setState: setEnableHomepageEntry },
           { key: 'videocard', label: '视频卡片入口', desc: '在视频卡片菜单中显示AI问片选项', state: enableVideoCardEntry, setState: setEnableVideoCardEntry },
           { key: 'playpage', label: '播放页入口', desc: '在视频播放页显示AI问片功能', state: enablePlayPageEntry, setState: setEnablePlayPageEntry },
+          { key: 'aicomments', label: 'AI评论功能', desc: '在播放页生成AI评论（独立于豆瓣评论）', state: enableAIComments, setState: setEnableAIComments },
         ].map((item) => (
           <div key={item.key} className='flex items-center justify-between py-2'>
             <div>
@@ -10327,6 +10937,53 @@ const LiveSourceConfig = ({
     });
   };
 
+  const handleSetProxyMode = (key: string, mode: 'full' | 'm3u8-only' | 'direct') => {
+    withLoading(`setLiveProxyMode_${key}`, async () => {
+      // 保存旧值用于回滚
+      const oldMode = liveSources.find((s) => s.key === key)?.proxyMode;
+
+      // 乐观更新本地状态
+      setLiveSources((prev) =>
+        prev.map((s) =>
+          s.key === key ? { ...s, proxyMode: mode } : s
+        )
+      );
+
+      try {
+        const response = await fetch('/api/admin/live', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set_proxy_mode',
+            key,
+            proxyMode: mode,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('设置代理模式失败');
+        }
+
+        // 成功后刷新配置
+        await refreshConfig();
+      } catch (error) {
+        // 失败时回滚本地状态
+        setLiveSources((prev) =>
+          prev.map((s) =>
+            s.key === key ? { ...s, proxyMode: oldMode } : s
+          )
+        );
+        showError(
+          error instanceof Error ? error.message : '设置代理模式失败',
+          showAlert
+        );
+        throw error;
+      }
+    }).catch(() => {
+      console.error('操作失败', 'set_proxy_mode', key);
+    });
+  };
+
   const handleDelete = (key: string) => {
     withLoading(`deleteLiveSource_${key}`, () =>
       callLiveSourceApi({ action: 'delete', key })
@@ -10502,6 +11159,24 @@ const LiveSourceConfig = ({
           >
             {!liveSource.disabled ? '启用中' : '已禁用'}
           </span>
+        </td>
+        <td className='px-6 py-4 whitespace-nowrap'>
+          <select
+            value={liveSource.proxyMode || 'full'}
+            onChange={(e) => {
+              handleSetProxyMode(liveSource.key, e.target.value as 'full' | 'm3u8-only' | 'direct');
+            }}
+            disabled={isLoading(`setLiveProxyMode_${liveSource.key}`)}
+            className={`px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ${
+              isLoading(`setLiveProxyMode_${liveSource.key}`)
+                ? 'opacity-50 cursor-not-allowed'
+                : 'cursor-pointer'
+            }`}
+          >
+            <option value='full'>全量代理</option>
+            <option value='m3u8-only'>仅代理m3u8</option>
+            <option value='direct'>直连</option>
+          </select>
         </td>
         <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
           <button
@@ -10809,6 +11484,9 @@ const LiveSourceConfig = ({
               </th>
               <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
                 状态
+              </th>
+              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                代理模式
               </th>
               <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
                 操作
@@ -11257,10 +11935,12 @@ function AdminPageClient() {
     openListConfig: false,
     embyConfig: false,
     xiaoyaConfig: false,
+    animeSubscription: false,
     aiConfig: false,
     liveSource: false,
     webLive: false,
     siteConfig: false,
+    musicConfig: false,
     registrationConfig: false,
     categoryConfig: false,
     configFile: false,
@@ -11599,6 +12279,21 @@ function AdminPageClient() {
               />
             </CollapsibleTab>
 
+            {/* 音乐配置标签 */}
+            <CollapsibleTab
+              title='音乐配置'
+              icon={
+                <Music
+                  size={20}
+                  className='text-gray-600 dark:text-gray-400'
+                />
+              }
+              isExpanded={expandedTabs.musicConfig}
+              onToggle={() => toggleTab('musicConfig')}
+            >
+              <MusicConfigComponent config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
             {/* 视频源配置标签 */}
             <CollapsibleTab
               title='视频源配置'
@@ -11692,6 +12387,18 @@ function AdminPageClient() {
                   onToggle={() => toggleTab('movieRequests')}
                 >
                   <MovieRequestsComponent config={config} refreshConfig={fetchConfig} />
+                </CollapsibleTab>
+
+                {/* 追番订阅子标签 */}
+                <CollapsibleTab
+                  title='追番订阅'
+                  icon={
+                    <Cat size={20} className='text-gray-600 dark:text-gray-400' />
+                  }
+                  isExpanded={expandedTabs.animeSubscription}
+                  onToggle={() => toggleTab('animeSubscription')}
+                >
+                  <AnimeSubscriptionComponent config={config} refreshConfig={fetchConfig} />
                 </CollapsibleTab>
               </div>
             </CollapsibleTab>

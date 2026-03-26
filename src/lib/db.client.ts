@@ -41,6 +41,7 @@ export interface PlayRecord {
   save_time: number; // 记录保存时间（时间戳）
   search_title?: string; // 搜索时使用的标题
   origin?: 'vod' | 'live'; // 来源类型
+  new_episodes?: number; // 新增的剧集数量（用于显示更新提示）
 }
 
 // ---- 收藏类型 ----
@@ -57,6 +58,19 @@ export interface Favorite {
   vod_remarks?: string; // 视频备注信息
 }
 
+// ---- 音乐播放记录类型 ----
+export interface MusicPlayRecord {
+  platform: 'netease' | 'qq' | 'kuwo'; // 音乐平台
+  id: string; // 歌曲ID
+  name: string; // 歌曲名
+  artist: string; // 艺术家
+  album?: string; // 专辑
+  pic?: string; // 封面图
+  play_time: number; // 播放进度（秒）
+  duration: number; // 总时长（秒）
+  save_time: number; // 记录保存时间（时间戳）
+}
+
 // ---- 缓存数据结构 ----
 interface CacheData<T> {
   data: T;
@@ -70,12 +84,14 @@ interface UserCacheStore {
   searchHistory?: CacheData<string[]>;
   skipConfigs?: CacheData<Record<string, SkipConfig>>;
   danmakuFilterConfig?: CacheData<DanmakuFilterConfig>;
+  musicPlayRecords?: CacheData<Record<string, MusicPlayRecord>>; // 音乐播放记录
 }
 
 // ---- 常量 ----
 const PLAY_RECORDS_KEY = 'moontv_play_records';
 const FAVORITES_KEY = 'moontv_favorites';
 const SEARCH_HISTORY_KEY = 'moontv_search_history';
+const MUSIC_PLAY_RECORDS_KEY = 'moontv_music_play_records';
 
 // 缓存相关常量
 const CACHE_PREFIX = 'moontv_cache_';
@@ -399,6 +415,32 @@ class HybridCacheManager {
   }
 
   /**
+   * 音乐播放记录缓存方法
+   */
+  getCachedMusicPlayRecords(): Record<string, MusicPlayRecord> | null {
+    const username = this.getCurrentUsername();
+    if (!username) return null;
+
+    const userCache = this.getUserCache(username);
+    const cached = userCache.musicPlayRecords;
+
+    if (cached && this.isCacheValid(cached)) {
+      return cached.data;
+    }
+
+    return null;
+  }
+
+  cacheMusicPlayRecords(data: Record<string, MusicPlayRecord>): void {
+    const username = this.getCurrentUsername();
+    if (!username) return;
+
+    const userCache = this.getUserCache(username);
+    userCache.musicPlayRecords = this.createCacheData(data);
+    this.saveUserCache(username, userCache);
+  }
+
+  /**
    * 清除指定用户的所有缓存
    */
   clearUserCache(username?: string): void {
@@ -674,6 +716,42 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
   }
 }
 
+export function getCachedPlayRecordsSnapshot(): Record<string, PlayRecord> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  if (STORAGE_TYPE !== 'localstorage') {
+    const cachedRecords = cacheManager.getCachedPlayRecords();
+    if (cachedRecords) {
+      return cachedRecords;
+    }
+
+    try {
+      const username = getAuthInfoFromBrowserCookie()?.username;
+      if (!username) return {};
+
+      const raw = localStorage.getItem(`${CACHE_PREFIX}${username}`);
+      if (!raw) return {};
+
+      const userCache = JSON.parse(raw) as UserCacheStore;
+      return userCache.playRecords?.data || {};
+    } catch (err) {
+      console.error('读取用户播放记录快照失败:', err);
+      return {};
+    }
+  }
+
+  try {
+    const raw = localStorage.getItem(PLAY_RECORDS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, PlayRecord>;
+  } catch (err) {
+    console.error('读取本地播放记录快照失败:', err);
+    return {};
+  }
+}
+
 /**
  * 保存播放记录。
  * 数据库存储模式下使用乐观更新：先更新缓存（立即生效），再异步同步到数据库。
@@ -818,13 +896,15 @@ export async function getSearchHistory(): Promise<string[]> {
       // 返回缓存数据，同时后台异步更新
       fetchFromApi<string[]>(`/api/searchhistory`)
         .then((freshData) => {
+          // 去重处理
+          const uniqueData = Array.from(new Set(freshData));
           // 只有数据真正不同时才更新缓存
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
-            cacheManager.cacheSearchHistory(freshData);
+          if (JSON.stringify(cachedData) !== JSON.stringify(uniqueData)) {
+            cacheManager.cacheSearchHistory(uniqueData);
             // 触发数据更新事件
             window.dispatchEvent(
               new CustomEvent('searchHistoryUpdated', {
-                detail: freshData,
+                detail: uniqueData,
               })
             );
           }
@@ -839,8 +919,10 @@ export async function getSearchHistory(): Promise<string[]> {
       // 缓存为空，直接从 API 获取并缓存
       try {
         const freshData = await fetchFromApi<string[]>(`/api/searchhistory`);
-        cacheManager.cacheSearchHistory(freshData);
-        return freshData;
+        // 去重处理
+        const uniqueData = Array.from(new Set(freshData));
+        cacheManager.cacheSearchHistory(uniqueData);
+        return uniqueData;
       } catch (err) {
         console.error('获取搜索历史失败:', err);
         triggerGlobalError('获取搜索历史失败');
@@ -854,8 +936,9 @@ export async function getSearchHistory(): Promise<string[]> {
     const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw) as string[];
-    // 仅返回字符串数组
-    return Array.isArray(arr) ? arr : [];
+    // 仅返回字符串数组，并去重
+    const validArray = Array.isArray(arr) ? arr : [];
+    return Array.from(new Set(validArray));
   } catch (err) {
     console.error('读取搜索历史失败:', err);
     triggerGlobalError('读取搜索历史失败');
@@ -1886,6 +1969,236 @@ export async function saveDanmakuFilterConfig(
     triggerGlobalError('保存弹幕过滤配置失败');
     throw err;
   }
+}
+
+// ---------------- 音乐播放记录相关 API ----------------
+
+/**
+ * 获取全部音乐播放记录。
+ * 数据库存储模式下使用混合缓存策略：优先返回缓存数据，后台异步同步最新数据。
+ */
+export async function getAllMusicPlayRecords(): Promise<Record<string, MusicPlayRecord>> {
+  // 服务器端渲染阶段直接返回空
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  // 数据库存储模式：使用混合缓存策略（包括 redis 和 upstash）
+  if (STORAGE_TYPE !== 'localstorage') {
+    // 优先从缓存获取数据
+    const cachedData = cacheManager.getCachedMusicPlayRecords();
+
+    if (cachedData) {
+      // 返回缓存数据，同时后台异步更新
+      fetchFromApi<Record<string, MusicPlayRecord>>(`/api/music/playrecords`)
+        .then((freshData) => {
+          // 只有数据真正不同时才更新缓存
+          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+            cacheManager.cacheMusicPlayRecords(freshData);
+            // 触发数据更新事件
+            window.dispatchEvent(
+              new CustomEvent('musicPlayRecordsUpdated', {
+                detail: freshData,
+              })
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn('后台同步音乐播放记录失败:', err);
+          triggerGlobalError('后台同步音乐播放记录失败');
+        });
+
+      return cachedData;
+    } else {
+      // 缓存为空，直接从 API 获取并缓存
+      try {
+        const freshData = await fetchFromApi<Record<string, MusicPlayRecord>>(
+          `/api/music/playrecords`
+        );
+        cacheManager.cacheMusicPlayRecords(freshData);
+        return freshData;
+      } catch (err) {
+        console.error('获取音乐播放记录失败:', err);
+        triggerGlobalError('获取音乐播放记录失败');
+        return {};
+      }
+    }
+  }
+
+  // localstorage 模式
+  try {
+    const raw = localStorage.getItem(MUSIC_PLAY_RECORDS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, MusicPlayRecord>;
+  } catch (err) {
+    console.error('读取音乐播放记录失败:', err);
+    triggerGlobalError('读取音乐播放记录失败');
+    return {};
+  }
+}
+
+/**
+ * 保存音乐播放记录。
+ * 数据库存储模式下使用乐观更新：先更新缓存（立即生效），再异步同步到数据库。
+ */
+export async function saveMusicPlayRecord(
+  platform: string,
+  id: string,
+  record: MusicPlayRecord
+): Promise<void> {
+  const key = generateStorageKey(platform, id);
+
+  // 数据库存储模式：乐观更新策略（包括 redis 和 upstash）
+  if (STORAGE_TYPE !== 'localstorage') {
+    // 立即更新缓存
+    const cachedRecords = cacheManager.getCachedMusicPlayRecords() || {};
+    cachedRecords[key] = record;
+    cacheManager.cacheMusicPlayRecords(cachedRecords);
+
+    // 触发立即更新事件
+    window.dispatchEvent(
+      new CustomEvent('musicPlayRecordsUpdated', {
+        detail: cachedRecords,
+      })
+    );
+
+    // 异步同步到数据库
+    try {
+      await fetchWithAuth('/api/music/playrecords', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key, record }),
+      });
+    } catch (err) {
+      console.error('保存音乐播放记录失败:', err);
+      triggerGlobalError('保存音乐播放记录失败');
+      throw err;
+    }
+    return;
+  }
+
+  // localstorage 模式
+  if (typeof window === 'undefined') {
+    console.warn('无法在服务端保存音乐播放记录到 localStorage');
+    return;
+  }
+
+  try {
+    const allRecords = await getAllMusicPlayRecords();
+    allRecords[key] = record;
+    localStorage.setItem(MUSIC_PLAY_RECORDS_KEY, JSON.stringify(allRecords));
+    window.dispatchEvent(
+      new CustomEvent('musicPlayRecordsUpdated', {
+        detail: allRecords,
+      })
+    );
+  } catch (err) {
+    console.error('保存音乐播放记录失败:', err);
+    triggerGlobalError('保存音乐播放记录失败');
+    throw err;
+  }
+}
+
+/**
+ * 删除音乐播放记录。
+ * 数据库存储模式下使用乐观更新：先更新缓存，再异步同步到数据库。
+ */
+export async function deleteMusicPlayRecord(
+  platform: string,
+  id: string
+): Promise<void> {
+  const key = generateStorageKey(platform, id);
+
+  // 数据库存储模式：乐观更新策略（包括 redis 和 upstash）
+  if (STORAGE_TYPE !== 'localstorage') {
+    // 立即更新缓存
+    const cachedRecords = cacheManager.getCachedMusicPlayRecords() || {};
+    delete cachedRecords[key];
+    cacheManager.cacheMusicPlayRecords(cachedRecords);
+
+    // 触发立即更新事件
+    window.dispatchEvent(
+      new CustomEvent('musicPlayRecordsUpdated', {
+        detail: cachedRecords,
+      })
+    );
+
+    // 异步同步到数据库
+    try {
+      await fetchWithAuth(`/api/music/playrecords?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('删除音乐播放记录失败:', err);
+      triggerGlobalError('删除音乐播放记录失败');
+      throw err;
+    }
+    return;
+  }
+
+  // localstorage 模式
+  if (typeof window === 'undefined') {
+    console.warn('无法在服务端删除音乐播放记录到 localStorage');
+    return;
+  }
+
+  try {
+    const allRecords = await getAllMusicPlayRecords();
+    delete allRecords[key];
+    localStorage.setItem(MUSIC_PLAY_RECORDS_KEY, JSON.stringify(allRecords));
+    window.dispatchEvent(
+      new CustomEvent('musicPlayRecordsUpdated', {
+        detail: allRecords,
+      })
+    );
+  } catch (err) {
+    console.error('删除音乐播放记录失败:', err);
+    triggerGlobalError('删除音乐播放记录失败');
+    throw err;
+  }
+}
+
+/**
+ * 清空全部音乐播放记录
+ * 数据库存储模式下使用乐观更新：先更新缓存，再异步同步到数据库。
+ */
+export async function clearAllMusicPlayRecords(): Promise<void> {
+  // 数据库存储模式：乐观更新策略（包括 redis 和 upstash）
+  if (STORAGE_TYPE !== 'localstorage') {
+    // 立即更新缓存
+    cacheManager.cacheMusicPlayRecords({});
+
+    // 触发立即更新事件
+    window.dispatchEvent(
+      new CustomEvent('musicPlayRecordsUpdated', {
+        detail: {},
+      })
+    );
+
+    // 异步同步到数据库
+    try {
+      await fetchWithAuth(`/api/music/playrecords`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('清空音乐播放记录失败:', err);
+      triggerGlobalError('清空音乐播放记录失败');
+      throw err;
+    }
+    return;
+  }
+
+  // localStorage 模式
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(MUSIC_PLAY_RECORDS_KEY);
+  window.dispatchEvent(
+    new CustomEvent('musicPlayRecordsUpdated', {
+      detail: {},
+    })
+  );
 }
 
 // ---------------- 集数过滤配置相关 API ----------------

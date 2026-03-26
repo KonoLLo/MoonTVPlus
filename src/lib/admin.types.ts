@@ -96,6 +96,7 @@ export interface AdminConfig {
     from: 'config' | 'custom';
     channelNumber?: number;
     disabled?: boolean;
+    proxyMode?: 'full' | 'm3u8-only' | 'direct'; // 代理模式：full=全量代理，m3u8-only=仅代理m3u8，direct=直连
   }[];
   WebLiveConfig?: {
     key: string;
@@ -115,6 +116,10 @@ export interface AdminConfig {
     cacheVersion: number; // CSS版本号（用于缓存控制）
     loginBackgroundImage?: string; // 登录界面背景图
     registerBackgroundImage?: string; // 注册界面背景图
+    // 进度条图标配置
+    progressThumbType?: 'default' | 'preset' | 'custom'; // 图标类型
+    progressThumbPresetId?: string; // 预制图标ID
+    progressThumbCustomUrl?: string; // 自定义图标URL
   };
   OpenListConfig?: {
     Enabled: boolean; // 是否启用私人影库功能
@@ -165,6 +170,7 @@ export interface AdminConfig {
     EnableHomepageEntry: boolean; // 首页入口开关
     EnableVideoCardEntry: boolean; // VideoCard入口开关
     EnablePlayPageEntry: boolean; // 播放页入口开关
+    EnableAIComments: boolean; // AI评论生成开关
     // 权限控制
     AllowRegularUsers: boolean; // 是否允许普通用户使用AI问片（关闭后仅站长和管理员可用）
     // 高级设置
@@ -197,6 +203,7 @@ export interface AdminConfig {
       appendMediaSourceId?: boolean; // 拼接MediaSourceId参数
       transcodeMp4?: boolean; // 转码mp4
       proxyPlay?: boolean; // 视频播放代理开关
+      customUserAgent?: string; // 自定义User-Agent
     }>;
     // 旧格式：单源配置（向后兼容）
     Enabled?: boolean;
@@ -235,6 +242,34 @@ export interface AdminConfig {
       apiKey: string; // Resend API Key
       from: string; // 发件人邮箱
     };
+  };
+  MusicConfig?: {
+    // TuneHub音乐配置
+    TuneHubEnabled?: boolean; // 启用音乐功能
+    TuneHubBaseUrl?: string; // TuneHub API地址
+    TuneHubApiKey?: string; // TuneHub API Key
+    // OpenList缓存配置
+    OpenListCacheEnabled?: boolean; // 启用OpenList缓存
+    OpenListCacheURL?: string; // OpenList服务器地址
+    OpenListCacheUsername?: string; // OpenList用户名
+    OpenListCachePassword?: string; // OpenList密码
+    OpenListCachePath?: string; // OpenList缓存目录路径
+    OpenListCacheProxyEnabled?: boolean; // 启用缓存代理返回（默认开启）
+  };
+  AnimeSubscriptionConfig?: {
+    Enabled: boolean; // 是否启用追番功能
+    Subscriptions: Array<{
+      id: string;
+      title: string;
+      filterText: string;
+      source: 'acgrip' | 'mikan' | 'dmhy';
+      enabled: boolean;
+      lastCheckTime: number;
+      lastEpisode: number;
+      createdAt: number;
+      updatedAt: number;
+      createdBy: string;
+    }>;
   };
 }
 

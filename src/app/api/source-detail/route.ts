@@ -4,12 +4,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getCacheTime, getConfig } from '@/lib/config';
-import { searchFromApi } from '@/lib/downstream';
+import { getDetailFromApiV2 } from '@/lib/downstream';
+import { getProxyToken } from '@/lib/emby-token';
 
 export const runtime = 'nodejs';
 
 /**
- * 根据 source 和 id 从搜索结果中精确匹配获取视频详情
+ * 根据 source 和 id 直接获取视频详情
  * 这个API专门用于play页面快速获取当前源的详情
  */
 export async function GET(request: NextRequest) {
@@ -21,10 +22,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   const sourceCode = searchParams.get('source');
-  const title = searchParams.get('title'); // 用于搜索的标题
   const fileName = searchParams.get('fileName'); // 小雅源：用户点击的文件名
 
-  if (!id || !sourceCode || !title) {
+  if (!id || !sourceCode) {
     return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
   }
 
@@ -52,6 +52,9 @@ export async function GET(request: NextRequest) {
 
       const client = await embyManager.getClient(embyKey);
 
+      // 获取代理 token（如果启用了代理）
+      const proxyToken = client.isProxyEnabled() ? await getProxyToken(request) : null;
+
       // 获取媒体详情
       const item = await client.getItem(id);
 
@@ -65,7 +68,7 @@ export async function GET(request: NextRequest) {
           source_name: sourceName,
           id: item.Id,
           title: item.Name,
-          poster: client.getImageUrl(item.Id, 'Primary'),
+          poster: client.getImageUrl(item.Id, 'Primary', undefined, proxyToken || undefined),
           year: item.ProductionYear?.toString() || '',
           douban_id: 0,
           desc: item.Overview || '',
@@ -99,7 +102,7 @@ export async function GET(request: NextRequest) {
           source_name: sourceName,
           id: item.Id,
           title: item.Name,
-          poster: client.getImageUrl(item.Id, 'Primary'),
+          poster: client.getImageUrl(item.Id, 'Primary', undefined, proxyToken || undefined),
           year: item.ProductionYear?.toString() || '',
           douban_id: 0,
           desc: item.Overview || '',
@@ -293,7 +296,7 @@ export async function GET(request: NextRequest) {
         const listResponse = await client.listDirectory(folderPath, currentPage, pageSize);
 
         if (listResponse.code !== 200) {
-          throw new Error('OpenList 列表获取失败');
+          throw new Error('OpenList 列表获取失败4');
         }
 
         total = listResponse.data.total;
@@ -381,7 +384,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 对于其他源，通过搜索API获取，然后精确匹配
+  if (!/^[\w-]+$/.test(id)) {
+    return NextResponse.json({ error: '无效的视频ID格式' }, { status: 400 });
+  }
+
+  // 对于其他采集源，直接按 id 获取详情。
   try {
     const apiSites = await getAvailableApiSites(authInfo.username);
     const apiSite = apiSites.find((site) => site.key === sourceCode);
@@ -390,26 +397,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '无效的API来源' }, { status: 400 });
     }
 
-    // 调用搜索API
-    const searchResults = await searchFromApi(apiSite, title.trim());
-
-    // 从搜索结果中精确匹配 source 和 id
-    const exactMatch = searchResults.find(
-      (item: any) =>
-        item.source?.toString() === sourceCode.toString() &&
-        item.id?.toString() === id.toString()
-    );
-
-    if (!exactMatch) {
-      return NextResponse.json(
-        { error: '未找到匹配的视频源' },
-        { status: 404 }
-      );
-    }
+    const result = await getDetailFromApiV2(apiSite, id);
 
     // 添加 proxyMode 到返回结果
     const resultWithProxy = {
-      ...exactMatch,
+      ...result,
       proxyMode: apiSite.proxyMode || false,
     };
 
