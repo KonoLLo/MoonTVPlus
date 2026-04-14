@@ -8557,10 +8557,10 @@ const SiteConfigComponent = ({
                   type='checkbox'
                   className='sr-only peer'
                   checked={siteSettings.DanmakuAutoLoadDefault !== false}
-                  onChange={() =>
+                  onChange={(e) =>
                     setSiteSettings((prev) => ({
                       ...prev,
-                      DanmakuAutoLoadDefault: prev.DanmakuAutoLoadDefault === false,
+                      DanmakuAutoLoadDefault: e.target.checked,
                     }))
                   }
                 />
