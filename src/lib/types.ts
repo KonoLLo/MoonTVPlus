@@ -1,4 +1,5 @@
 import { AdminConfig } from './admin.types';
+import { MangaReadRecord, MangaShelfItem } from './manga.types';
 
 // 播放记录数据结构
 export interface PlayRecord {
@@ -74,6 +75,19 @@ export interface IStorage {
   getSearchHistory(userName: string): Promise<string[]>;
   addSearchHistory(userName: string, keyword: string): Promise<void>;
   deleteSearchHistory(userName: string, keyword?: string): Promise<void>;
+
+  // 漫画书架相关
+  getMangaShelf(userName: string, key: string): Promise<MangaShelfItem | null>;
+  setMangaShelf(userName: string, key: string, item: MangaShelfItem): Promise<void>;
+  getAllMangaShelf(userName: string): Promise<{ [key: string]: MangaShelfItem }>;
+  deleteMangaShelf(userName: string, key: string): Promise<void>;
+
+  // 漫画阅读历史相关
+  getMangaReadRecord(userName: string, key: string): Promise<MangaReadRecord | null>;
+  setMangaReadRecord(userName: string, key: string, record: MangaReadRecord): Promise<void>;
+  getAllMangaReadRecords(userName: string): Promise<{ [key: string]: MangaReadRecord }>;
+  deleteMangaReadRecord(userName: string, key: string): Promise<void>;
+  cleanupOldMangaReadRecords?(userName: string): Promise<void>;
 
   // 用户列表
   getAllUsers(): Promise<string[]>;

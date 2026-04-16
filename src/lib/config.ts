@@ -623,6 +623,35 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
     }
   }
 
+  if (!adminConfig.SuwayomiConfig) {
+    adminConfig.SuwayomiConfig = {
+      Enabled: process.env.SUWAYOMI_ENABLED === 'true',
+      ServerURL: process.env.SUWAYOMI_URL || process.env.NEXT_PUBLIC_SUWAYOMI_URL || '',
+      AuthToken: process.env.SUWAYOMI_AUTH_TOKEN || '',
+      DefaultLang: process.env.SUWAYOMI_DEFAULT_LANG || 'zh',
+      SourceIds: [],
+      MaxSources: Number(process.env.SUWAYOMI_MAX_SOURCES || 10),
+    };
+  }
+  if (adminConfig.SuwayomiConfig.Enabled === undefined) {
+    adminConfig.SuwayomiConfig.Enabled = false;
+  }
+  if (adminConfig.SuwayomiConfig.ServerURL === undefined) {
+    adminConfig.SuwayomiConfig.ServerURL = '';
+  }
+  if (adminConfig.SuwayomiConfig.AuthToken === undefined) {
+    adminConfig.SuwayomiConfig.AuthToken = '';
+  }
+  if (adminConfig.SuwayomiConfig.DefaultLang === undefined) {
+    adminConfig.SuwayomiConfig.DefaultLang = 'zh';
+  }
+  if (!Array.isArray(adminConfig.SuwayomiConfig.SourceIds)) {
+    adminConfig.SuwayomiConfig.SourceIds = [];
+  }
+  if (adminConfig.SuwayomiConfig.MaxSources === undefined || Number.isNaN(adminConfig.SuwayomiConfig.MaxSources)) {
+    adminConfig.SuwayomiConfig.MaxSources = 10;
+  }
+
   if (!adminConfig.NetDiskConfig) {
     adminConfig.NetDiskConfig = {
       Quark: {

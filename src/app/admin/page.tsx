@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   AlertCircle,
   AlertTriangle,
+  BookOpen,
   Bot,
   Cat,
   Check,
@@ -10114,6 +10115,181 @@ const CustomAdFilterConfig = ({
 };
 
 // 小雅配置组件
+
+const SuwayomiConfigComponent = ({
+  config,
+  refreshConfig,
+}: {
+  config: AdminConfig | null;
+  refreshConfig: () => Promise<void>;
+}) => {
+  const { alertModal, showAlert, hideAlert } = useAlertModal();
+  const { isLoading, withLoading } = useLoadingState();
+  const [enabled, setEnabled] = useState(false);
+  const [serverURL, setServerURL] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [defaultLang, setDefaultLang] = useState('zh');
+  const [sourceIds, setSourceIds] = useState('');
+  const [maxSources, setMaxSources] = useState(10);
+
+  useEffect(() => {
+    if (config?.SuwayomiConfig) {
+      setEnabled(config.SuwayomiConfig.Enabled || false);
+      setServerURL(config.SuwayomiConfig.ServerURL || '');
+      setAuthToken(config.SuwayomiConfig.AuthToken || '');
+      setDefaultLang(config.SuwayomiConfig.DefaultLang || 'zh');
+      setSourceIds((config.SuwayomiConfig.SourceIds || []).join(','));
+      setMaxSources(config.SuwayomiConfig.MaxSources || 10);
+    }
+  }, [config]);
+
+  const buildConfig = () => ({
+    Enabled: enabled,
+    ServerURL: serverURL,
+    AuthToken: authToken,
+    DefaultLang: defaultLang || 'zh',
+    SourceIds: sourceIds.split(',').map((item) => item.trim()).filter(Boolean),
+    MaxSources: Math.max(1, maxSources || 10),
+  });
+
+  const handleSave = async () => {
+    await withLoading('saveSuwayomi', async () => {
+      try {
+        if (!config) throw new Error('配置未加载');
+
+        const response = await fetch('/api/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...config,
+            SuwayomiConfig: buildConfig(),
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || '保存失败');
+        }
+
+        showSuccess('漫画后端配置已保存', showAlert);
+        await refreshConfig();
+      } catch (error) {
+        showError(error instanceof Error ? error.message : '保存失败', showAlert);
+        throw error;
+      }
+    });
+  };
+
+  return (
+    <div className='space-y-6'>
+      <div className='bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4'>
+        <h3 className='text-sm font-medium text-blue-900 dark:text-blue-100 mb-2'>
+          关于漫画展馆 / Suwayomi
+        </h3>
+        <div className='text-sm text-blue-800 dark:text-blue-200 space-y-1'>
+          <p>• 漫画展馆通过 Suwayomi Server 的 GraphQL 接口搜索、拉取章节与阅读页。</p>
+          <p>• 可限制默认语言、可用源白名单，以及单次搜索最多查询的源数量。</p>
+          <p>• 保存后漫画模块会优先使用这里的配置，环境变量只作为兜底。</p>
+        </div>
+      </div>
+
+      <div className='space-y-4'>
+        <div className='flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700'>
+          <div>
+            <h3 className='text-sm font-medium text-gray-900 dark:text-white'>启用漫画展馆</h3>
+            <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>关闭后仍保留代码，但不建议在未配置时对用户开放入口。</p>
+          </div>
+          <button
+            onClick={() => setEnabled(!enabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
+            />
+          </button>
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>Suwayomi 服务地址</label>
+          <input
+            type='text'
+            value={serverURL}
+            onChange={(e) => setServerURL(e.target.value)}
+            placeholder='http://127.0.0.1:4567'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+          />
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>只填服务根地址，程序会自动拼接 /api/graphql。</p>
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>认证 Token</label>
+          <input
+            type='password'
+            value={authToken}
+            onChange={(e) => setAuthToken(e.target.value)}
+            placeholder='可选，若 Suwayomi 开启认证请填写'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+          />
+        </div>
+
+        <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+          <div>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>默认语言</label>
+            <input
+              type='text'
+              value={defaultLang}
+              onChange={(e) => setDefaultLang(e.target.value)}
+              placeholder='zh'
+              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+            />
+          </div>
+          <div>
+            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>单次搜索最大源数</label>
+            <input
+              type='number'
+              min='1'
+              value={maxSources}
+              onChange={(e) => setMaxSources(parseInt(e.target.value) || 10)}
+              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>源白名单</label>
+          <textarea
+            value={sourceIds}
+            onChange={(e) => setSourceIds(e.target.value)}
+            rows={3}
+            placeholder='留空表示使用默认语言下全部源；填写时用英文逗号分隔 sourceId'
+            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+          />
+        </div>
+
+        <div className='flex gap-3'>
+          <button
+            onClick={handleSave}
+            disabled={isLoading('saveSuwayomi')}
+            className={buttonStyles.success}
+          >
+            {isLoading('saveSuwayomi') ? '保存中...' : '保存配置'}
+          </button>
+        </div>
+      </div>
+
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={hideAlert}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        timer={alertModal.timer}
+        showConfirm={alertModal.showConfirm}
+      />
+    </div>
+  );
+};
+
 const XiaoyaConfigComponent = ({
   config,
   refreshConfig,
@@ -12822,6 +12998,7 @@ function AdminPageClient() {
     netDiskConfig: false,
     embyConfig: false,
     xiaoyaConfig: false,
+    suwayomiConfig: false,
     animeSubscription: false,
     aiConfig: false,
     liveSource: false,
@@ -13213,6 +13390,18 @@ function AdminPageClient() {
               <MusicConfigComponent config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
+
+            <CollapsibleTab
+              title='漫画配置'
+              icon={
+                <BookOpen size={20} className='text-gray-600 dark:text-gray-400' />
+              }
+              isExpanded={expandedTabs.suwayomiConfig}
+              onToggle={() => toggleTab('suwayomiConfig')}
+            >
+              <SuwayomiConfigComponent config={config} refreshConfig={fetchConfig} />
+            </CollapsibleTab>
+
             {/* 电视直播源配置标签 */}
             <CollapsibleTab
               title='电视直播源配置'
@@ -13283,7 +13472,6 @@ function AdminPageClient() {
                 >
                   <XiaoyaConfigComponent config={config} refreshConfig={fetchConfig} />
                 </CollapsibleTab>
-
                 {/* 求片管理子标签 */}
                 <CollapsibleTab
                   title='求片管理'

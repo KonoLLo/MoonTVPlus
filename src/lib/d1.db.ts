@@ -16,6 +16,7 @@ import {
   MovieRequest,
 } from './types';
 import { AdminConfig } from './admin.types';
+import { MangaReadRecord, MangaShelfItem } from './manga.types';
 import { DatabaseAdapter } from './d1-adapter';
 import { MusicV2HistoryRecord, MusicV2PlaylistItem, MusicV2PlaylistRecord } from './music-v2';
 import { userInfoCache } from './user-cache';
@@ -1775,6 +1776,268 @@ export class D1Storage implements IStorage {
     }
   }
 
+  // ==================== 漫画书架 ====================
+
+  async getMangaShelf(userName: string, key: string): Promise<MangaShelfItem | null> {
+    try {
+      const result = await this.db
+        .prepare('SELECT * FROM manga_shelf WHERE username = ? AND key = ?')
+        .bind(userName, key)
+        .first();
+
+      if (!result) return null;
+      return {
+        title: result.title as string,
+        cover: (result.cover as string) || '',
+        sourceId: result.source_id as string,
+        sourceName: result.source_name as string,
+        mangaId: result.manga_id as string,
+        saveTime: Number(result.save_time || 0),
+        description: (result.description as string) || undefined,
+        author: (result.author as string) || undefined,
+        status: (result.status as string) || undefined,
+        lastChapterId: (result.last_chapter_id as string) || undefined,
+        lastChapterName: (result.last_chapter_name as string) || undefined,
+      };
+    } catch (err) {
+      console.error('D1Storage.getMangaShelf error:', err);
+      throw err;
+    }
+  }
+
+  async setMangaShelf(userName: string, key: string, item: MangaShelfItem): Promise<void> {
+    try {
+      await this.db
+        .prepare(`
+          INSERT INTO manga_shelf (
+            username, key, source_id, source_name, manga_id, title, cover, save_time,
+            description, author, status, last_chapter_id, last_chapter_name
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(username, key) DO UPDATE SET
+            source_id = excluded.source_id,
+            source_name = excluded.source_name,
+            manga_id = excluded.manga_id,
+            title = excluded.title,
+            cover = excluded.cover,
+            save_time = excluded.save_time,
+            description = excluded.description,
+            author = excluded.author,
+            status = excluded.status,
+            last_chapter_id = excluded.last_chapter_id,
+            last_chapter_name = excluded.last_chapter_name
+        `)
+        .bind(
+          userName,
+          key,
+          item.sourceId,
+          item.sourceName,
+          item.mangaId,
+          item.title,
+          item.cover || '',
+          item.saveTime,
+          item.description || null,
+          item.author || null,
+          item.status || null,
+          item.lastChapterId || null,
+          item.lastChapterName || null
+        )
+        .run();
+    } catch (err) {
+      console.error('D1Storage.setMangaShelf error:', err);
+      throw err;
+    }
+  }
+
+  async getAllMangaShelf(userName: string): Promise<{ [key: string]: MangaShelfItem }> {
+    try {
+      const results = await this.db
+        .prepare('SELECT * FROM manga_shelf WHERE username = ? ORDER BY save_time DESC')
+        .bind(userName)
+        .all();
+
+      const shelves: { [key: string]: MangaShelfItem } = {};
+      if (!results.results) return shelves;
+
+      for (const row of results.results) {
+        shelves[row.key as string] = {
+          title: row.title as string,
+          cover: (row.cover as string) || '',
+          sourceId: row.source_id as string,
+          sourceName: row.source_name as string,
+          mangaId: row.manga_id as string,
+          saveTime: Number(row.save_time || 0),
+          description: (row.description as string) || undefined,
+          author: (row.author as string) || undefined,
+          status: (row.status as string) || undefined,
+          lastChapterId: (row.last_chapter_id as string) || undefined,
+          lastChapterName: (row.last_chapter_name as string) || undefined,
+        };
+      }
+
+      return shelves;
+    } catch (err) {
+      console.error('D1Storage.getAllMangaShelf error:', err);
+      throw err;
+    }
+  }
+
+  async deleteMangaShelf(userName: string, key: string): Promise<void> {
+    try {
+      await this.db
+        .prepare('DELETE FROM manga_shelf WHERE username = ? AND key = ?')
+        .bind(userName, key)
+        .run();
+    } catch (err) {
+      console.error('D1Storage.deleteMangaShelf error:', err);
+      throw err;
+    }
+  }
+
+  // ==================== 漫画阅读历史 ====================
+
+  async getMangaReadRecord(userName: string, key: string): Promise<MangaReadRecord | null> {
+    try {
+      const result = await this.db
+        .prepare('SELECT * FROM manga_read_records WHERE username = ? AND key = ?')
+        .bind(userName, key)
+        .first();
+
+      if (!result) return null;
+      return {
+        title: result.title as string,
+        cover: (result.cover as string) || '',
+        sourceId: result.source_id as string,
+        sourceName: result.source_name as string,
+        mangaId: result.manga_id as string,
+        chapterId: result.chapter_id as string,
+        chapterName: result.chapter_name as string,
+        pageIndex: Number(result.page_index || 0),
+        pageCount: Number(result.page_count || 0),
+        saveTime: Number(result.save_time || 0),
+      };
+    } catch (err) {
+      console.error('D1Storage.getMangaReadRecord error:', err);
+      throw err;
+    }
+  }
+
+  async setMangaReadRecord(userName: string, key: string, record: MangaReadRecord): Promise<void> {
+    try {
+      await this.db
+        .prepare(`
+          INSERT INTO manga_read_records (
+            username, key, source_id, source_name, manga_id, title, cover,
+            chapter_id, chapter_name, page_index, page_count, save_time
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(username, key) DO UPDATE SET
+            source_id = excluded.source_id,
+            source_name = excluded.source_name,
+            manga_id = excluded.manga_id,
+            title = excluded.title,
+            cover = excluded.cover,
+            chapter_id = excluded.chapter_id,
+            chapter_name = excluded.chapter_name,
+            page_index = excluded.page_index,
+            page_count = excluded.page_count,
+            save_time = excluded.save_time
+        `)
+        .bind(
+          userName,
+          key,
+          record.sourceId,
+          record.sourceName,
+          record.mangaId,
+          record.title,
+          record.cover || '',
+          record.chapterId,
+          record.chapterName,
+          record.pageIndex,
+          record.pageCount,
+          record.saveTime
+        )
+        .run();
+    } catch (err) {
+      console.error('D1Storage.setMangaReadRecord error:', err);
+      throw err;
+    }
+  }
+
+  async getAllMangaReadRecords(userName: string): Promise<{ [key: string]: MangaReadRecord }> {
+    try {
+      const results = await this.db
+        .prepare('SELECT * FROM manga_read_records WHERE username = ? ORDER BY save_time DESC')
+        .bind(userName)
+        .all();
+
+      const records: { [key: string]: MangaReadRecord } = {};
+      if (!results.results) return records;
+
+      for (const row of results.results) {
+        records[row.key as string] = {
+          title: row.title as string,
+          cover: (row.cover as string) || '',
+          sourceId: row.source_id as string,
+          sourceName: row.source_name as string,
+          mangaId: row.manga_id as string,
+          chapterId: row.chapter_id as string,
+          chapterName: row.chapter_name as string,
+          pageIndex: Number(row.page_index || 0),
+          pageCount: Number(row.page_count || 0),
+          saveTime: Number(row.save_time || 0),
+        };
+      }
+
+      return records;
+    } catch (err) {
+      console.error('D1Storage.getAllMangaReadRecords error:', err);
+      throw err;
+    }
+  }
+
+  async deleteMangaReadRecord(userName: string, key: string): Promise<void> {
+    try {
+      await this.db
+        .prepare('DELETE FROM manga_read_records WHERE username = ? AND key = ?')
+        .bind(userName, key)
+        .run();
+    } catch (err) {
+      console.error('D1Storage.deleteMangaReadRecord error:', err);
+      throw err;
+    }
+  }
+
+  async cleanupOldMangaReadRecords(userName: string): Promise<void> {
+    try {
+      const maxRecords = parseInt(process.env.MAX_MANGA_HISTORY_PER_USER || '100', 10);
+      const countResult = await this.db
+        .prepare('SELECT COUNT(*) as count FROM manga_read_records WHERE username = ?')
+        .bind(userName)
+        .first();
+
+      const count = Number(countResult?.count || 0);
+      if (count <= maxRecords) return;
+
+      await this.db
+        .prepare(`
+          DELETE FROM manga_read_records
+          WHERE username = ?
+          AND key NOT IN (
+            SELECT key FROM manga_read_records
+            WHERE username = ?
+            ORDER BY save_time DESC
+            LIMIT ?
+          )
+        `)
+        .bind(userName, userName, maxRecords)
+        .run();
+    } catch (err) {
+      console.error('D1Storage.cleanupOldMangaReadRecords error:', err);
+      throw err;
+    }
+  }
+
   // ==================== 跳过配置 ====================
 
   async getSkipConfig(userName: string, source: string, id: string): Promise<SkipConfig | null> {
@@ -2235,6 +2498,8 @@ export class D1Storage implements IStorage {
         'play_records',
         'favorites',
         'search_history',
+        'manga_shelf',
+        'manga_read_records',
         'skip_configs',
         'music_play_records',
         'music_playlists',

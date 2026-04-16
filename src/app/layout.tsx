@@ -94,6 +94,7 @@ export default async function RootLayout({
   let webLiveEnabled = false;
   let customAdFilterVersion = 0;
   let tuneHubEnabled = false;
+  let suwayomiEnabled = false;
   let musicProxyEnabled = true;
   let advancedRecommendationEnabled = false;
   let customCategories = [] as {
@@ -153,6 +154,11 @@ export default async function RootLayout({
     // 音乐功能配置
     tuneHubEnabled = config.MusicConfig?.Enabled || false;
     musicProxyEnabled = config.MusicConfig?.ProxyEnabled ?? true;
+    // 漫画功能配置
+    suwayomiEnabled = !!(
+      config.SuwayomiConfig?.Enabled &&
+      config.SuwayomiConfig?.ServerURL
+    );
     // 高级推荐功能配置：存在已启用视频源脚本时显示
     advancedRecommendationEnabled =
       (await listEnabledSourceScripts()).length > 0;
@@ -229,6 +235,7 @@ export default async function RootLayout({
     CUSTOM_AD_FILTER_VERSION: customAdFilterVersion,
     MUSIC_ENABLED: tuneHubEnabled,
     MUSIC_PROXY_ENABLED: musicProxyEnabled,
+    SUWAYOMI_ENABLED: suwayomiEnabled,
     FESTIVE_EFFECT_ENABLED:
       process.env.FESTIVE_EFFECT_ENABLED === 'true',
   };
